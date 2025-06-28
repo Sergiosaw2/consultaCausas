@@ -1,0 +1,17 @@
+{
+  "name": "consultacausas",
+  "version": "1.0.0",
+  "description": "Aplicacion para consultar causas y no olvidarse ninguna",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "puppeteer": "^21.3.8",
+    "sqlite3": "^5.1.6"
+  }
+}
