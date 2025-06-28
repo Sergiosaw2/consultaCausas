@@ -33,6 +33,11 @@ async function initDb() {
   return client;
 }
 
+const PUPPETEER_OPTS = {
+  headless: process.env.HEADLESS !== 'false',
+  slowMo: process.env.SLOWMO ? parseInt(process.env.SLOWMO, 10) : 0
+};
+
 async function fetchNotifications(page) {
   return await page.evaluate(() => {
     return Array.from(document.querySelectorAll('.notification'))
@@ -44,11 +49,13 @@ async function fetchNotifications(page) {
 async function loginAndCheck(account, db, browser) {
   const page = await browser.newPage();
   console.log(`Logging in as ${account.username}`);
-  await page.goto('https://example.com/login');
+  await page.goto('https://example.com/login', { waitUntil: 'networkidle0' });
+  await page.waitForSelector('#username', { timeout: 10000 });
   await page.type('#username', account.username);
   await page.type('#password', account.password);
+  await page.screenshot({ path: `login_${account.username}.png` });
   await page.click('#login');
-  await page.waitForNavigation();
+  await page.waitForNavigation({ waitUntil: 'networkidle0' });
   await db.query('INSERT INTO access_log (lawyer) VALUES ($1)', [account.username]);
   const notes = await fetchNotifications(page);
   for (const note of notes) {
@@ -64,7 +71,7 @@ async function loginAndCheck(account, db, browser) {
 (async () => {
   const accounts = await loadAccounts();
   const db = await initDb();
-  const browser = await puppeteer.launch();
+  const browser = await puppeteer.launch(PUPPETEER_OPTS);
   for (const acc of accounts) {
     try {
       await loginAndCheck(acc, db, browser);
