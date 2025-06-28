@@ -1,32 +1,36 @@
 const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
-const sqlite3 = require('sqlite3').verbose();
+const { Client } = require('pg');
 
 const ACCOUNTS_FILE = path.join(__dirname, '../accounts.json');
-const DB_PATH = path.join(__dirname, '../data.db');
 
 async function loadAccounts() {
   const data = fs.readFileSync(ACCOUNTS_FILE, 'utf8');
   return JSON.parse(data);
 }
 
-function initDb() {
-  const db = new sqlite3.Database(DB_PATH);
-  db.serialize(() => {
-    db.run(`CREATE TABLE IF NOT EXISTS notifications (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      lawyer TEXT,
-      notification TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`);
-    db.run(`CREATE TABLE IF NOT EXISTS access_log (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      lawyer TEXT,
-      access_time DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`);
+async function initDb() {
+  const client = new Client({
+    host: '192.168.1.56',
+    port: 5433,
+    database: 'PJN',
+    user: 'postgres',
+    password: 'solari'
   });
-  return db;
+  await client.connect();
+  await client.query(`CREATE TABLE IF NOT EXISTS notifications (
+    id SERIAL PRIMARY KEY,
+    lawyer TEXT,
+    notification TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  )`);
+  await client.query(`CREATE TABLE IF NOT EXISTS access_log (
+    id SERIAL PRIMARY KEY,
+    lawyer TEXT,
+    access_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  )`);
+  return client;
 }
 
 async function fetchNotifications(page) {
@@ -45,26 +49,21 @@ async function loginAndCheck(account, db, browser) {
   await page.type('#password', account.password);
   await page.click('#login');
   await page.waitForNavigation();
-  db.run('INSERT INTO access_log (lawyer) VALUES (?)', [account.username]);
+  await db.query('INSERT INTO access_log (lawyer) VALUES ($1)', [account.username]);
   const notes = await fetchNotifications(page);
   for (const note of notes) {
-    await new Promise((resolve, reject) => {
-      db.get('SELECT id FROM notifications WHERE lawyer=? AND notification=?', [account.username, note], (err, row) => {
-        if (err) return reject(err);
-        if (!row) {
-          db.run('INSERT INTO notifications (lawyer, notification) VALUES (?, ?)', [account.username, note]);
-          console.log('New notification saved:', note);
-        }
-        resolve();
-      });
-    });
+    const res = await db.query('SELECT id FROM notifications WHERE lawyer=$1 AND notification=$2', [account.username, note]);
+    if (res.rowCount === 0) {
+      await db.query('INSERT INTO notifications (lawyer, notification) VALUES ($1, $2)', [account.username, note]);
+      console.log('New notification saved:', note);
+    }
   }
   await page.close();
 }
 
 (async () => {
   const accounts = await loadAccounts();
-  const db = initDb();
+  const db = await initDb();
   const browser = await puppeteer.launch();
   for (const acc of accounts) {
     try {
@@ -74,5 +73,5 @@ async function loginAndCheck(account, db, browser) {
     }
   }
   await browser.close();
-  db.close();
+  await db.end();
 })();

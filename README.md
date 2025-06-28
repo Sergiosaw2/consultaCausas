@@ -17,4 +17,5 @@ Ejecutar el proceso de login para todas las cuentas definidas en `accounts.json`
 node scripts/pjnLogin.js
 ```
 
-El script guarda las notificaciones nuevas y registra el acceso de cada abogado en `data.db`.
+El script guarda las notificaciones nuevas y registra el acceso de cada abogado en la base de datos Postgres configurada en `scripts/pjnLogin.js`.
+Por defecto se conecta al servidor `192.168.1.56:5433` usando la base `PJN` y el usuario `postgres`.
